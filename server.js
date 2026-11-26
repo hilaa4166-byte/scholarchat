@@ -148,7 +148,7 @@ function renderPage() {
       color: #f8fafc;
       border-radius: 8px;
       padding: 9px 10px;
-      font-size: 15px; /* iOS 자동 줌 방지용 15px 이상 */
+      font-size: 15px;
       outline: none;
     }
     input[type="text"]:focus { border-color: #3b82f6; }
@@ -293,7 +293,6 @@ function renderPage() {
       return audioCtx;
     }
 
-    // "띠링~" 이중 톤 알림음 재생
     function playDingSound() {
       const ctx = ensureAudioContext();
       if (!ctx) return;
@@ -657,3 +656,18 @@ const server = http.createServer(async (req, res) => {
       broadcast({ type: "cleared", by });
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       return res.end(JSON.stringify({ ok: true }));
+    } catch (_) {
+      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+      return res.end(JSON.stringify({ error: "삭제 실패" }));
+    }
+  }
+
+  res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+  res.end("Not found");
+});
+
+server.listen(PORT, () => {
+  console.log("채팅 서버가 시작됐어요.");
+  console.log("아래 주소를 친구와 둘만 공유하세요. 이 주소를 아는 사람만 들어올 수 있어요.");
+  console.log(`http://localhost:${PORT}/r/${ROOM_ID}`);
+});
