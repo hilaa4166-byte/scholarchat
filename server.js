@@ -2,7 +2,7 @@
 // 단둘이 쓰는 비공개 채팅 서버. 외부 패키지 없이 Node 내장 모듈만 씁니다.
 // - 비밀 주소를 아는 사람만 들어올 수 있어요. 그 밖의 주소는 모두 404예요.
 // - 동시에 접속할 수 있는 사람은 최대 2명이에요.
-// - 대화는 서버 메모리에만 있고(최근 100개), 서버가 꺼지거나 삭제하면 사라져요.
+// - 대화와 사진은 서버 메모리에만 있고(최근 100개), 서버가 꺼지거나 삭제하면 사라져요.
 
 const http = require("http");
 const crypto = require("crypto");
@@ -12,6 +12,7 @@ const PORT = process.env.PORT || 3000;
 const ROOM_ID = "scholarchat";
 const MAX_USERS = 2;
 const MAX_HISTORY = 100;
+const MAX_BODY_BYTES = 2 * 1024 * 1024; // 요청 최대 2MB
 
 const room = {
   messages: [],
@@ -78,11 +79,20 @@ function renderPage() {
       padding: 8px 12px;
       font-size: 13px;
       font-weight: 600;
+      flex-shrink: 0;
     }
     .btn-clear { background: #dc2626; color: #fff; }
     .btn-clear:hover { background: #b91c1c; }
     .btn-send { background: #2563eb; color: #fff; }
     .btn-send:hover { background: #1d4ed8; }
+    .btn-photo {
+      background: #334155;
+      color: #f8fafc;
+      padding: 8px 10px;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .btn-photo:hover { background: #475569; }
     #join-screen {
       flex: 1;
       display: flex;
@@ -152,6 +162,14 @@ function renderPage() {
       line-height: 1.45;
       white-space: pre-wrap;
     }
+    .msg-img {
+      display: block;
+      max-width: 100%;
+      max-height: 320px;
+      border-radius: 8px;
+      margin-top: 4px;
+      cursor: pointer;
+    }
     .sys-msg {
       align-self: center;
       font-size: 12px;
@@ -165,6 +183,7 @@ function renderPage() {
       border-top: 1px solid #334155;
       padding: 10px 12px;
       display: flex;
+      align-items: center;
       gap: 8px;
     }
     #status-msg {
@@ -178,7 +197,7 @@ function renderPage() {
   <header>
     <div class="room-info">
       <div class="room-title">ScholarChat</div>
-      <div class="room-meta" id="room-meta">대기 중 · 최대 ${MAX_USERS}명 · 최근 ${MAX_HISTORY}개 · /clear</div>
+      <div class="room-meta" id="room-meta">대기 중 · 최대 ${MAX_USERS}명 · /clear</div>
     </div>
     <button class="btn-clear" id="clear-btn" type="button">대화 삭제</button>
   </header>
@@ -186,7 +205,7 @@ function renderPage() {
   <section id="join-screen">
     <form class="join-card" id="join-form">
       <h2>채팅방 입장</h2>
-      <p>최근 ${MAX_HISTORY}개 대화만 메모리에 유지되며, 삭제 버튼 또는 /clear로 즉시 지울 수 있습니다.</p>
+      <p>대화와 사진은 메모리에만 임시 저장되며, 삭제 버튼 또는 /clear로 즉시 지워집니다.</p>
       <input type="text" id="nickname-input" placeholder="이름 또는 닉네임 입력" maxlength="20" required />
       <button class="btn-send" type="submit">입장하기</button>
       <div id="status-msg"></div>
@@ -196,6 +215,8 @@ function renderPage() {
   <section id="chat-screen">
     <div id="messages"></div>
     <form id="composer">
+      <input type="file" id="photo-input" accept="image/*" hidden />
+      <button class="btn-photo" id="photo-btn" type="button" title="사진 첨부">📷</button>
       <input type="text" id="message-input" placeholder="메시지 입력 (/clear 입력 시 대화 삭제)" autocomplete="off" />
       <button class="btn-send" type="submit">전송</button>
     </form>
@@ -212,6 +233,8 @@ function renderPage() {
     const messageInput = document.getElementById("message-input");
     const roomMeta = document.getElementById("room-meta");
     const clearBtn = document.getElementById("clear-btn");
+    const photoBtn = document.getElementById("photo-btn");
+    const photoInput = document.getElementById("photo-input");
 
     let myName = "";
     let eventSource = null;
@@ -231,13 +254,24 @@ function renderPage() {
       const sender = document.createElement("div");
       sender.className = "msg-sender";
       sender.textContent = msg.sender;
-
-      const text = document.createElement("div");
-      text.className = "msg-text";
-      text.textContent = msg.text;
-
       div.appendChild(sender);
-      div.appendChild(text);
+
+      if (msg.image) {
+        const img = document.createElement("img");
+        img.className = "msg-img";
+        img.src = msg.image;
+        img.alt = "첨부 이미지";
+        img.onclick = () => window.open(msg.image, "_blank");
+        div.appendChild(img);
+      }
+
+      if (msg.text) {
+        const text = document.createElement("div");
+        text.className = "msg-text";
+        text.textContent = msg.text;
+        div.appendChild(text);
+      }
+
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
@@ -255,9 +289,65 @@ function renderPage() {
       });
     }
 
+    function compressImageToDataUrl(file, maxSide = 1000, quality = 0.78) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = () => {
+          const img = new Image();
+          img.onerror = reject;
+          img.onload = () => {
+            let { width, height } = img;
+            if (width > maxSide || height > maxSide) {
+              if (width >= height) {
+                height = Math.round((height * maxSide) / width);
+                width = maxSide;
+              } else {
+                width = Math.round((width * maxSide) / height);
+                height = maxSide;
+              }
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL("image/jpeg", quality));
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    photoBtn.addEventListener("click", () => {
+      if (!myName) return;
+      photoInput.click();
+    });
+
+    photoInput.addEventListener("change", async () => {
+      const file = photoInput.files && photoInput.files[0];
+      photoInput.value = "";
+      if (!file || !myName) return;
+
+      try {
+        const dataUrl = await compressImageToDataUrl(file);
+        const res = await fetch("/api/message", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sender: myName, image: dataUrl }),
+        });
+        if (!res.ok) {
+          addSystemMessage("사진 전송에 실패했습니다. (용량 초과 또는 연결 오류)");
+        }
+      } catch (_) {
+        addSystemMessage("이미지를 처리하지 못했습니다.");
+      }
+    });
+
     clearBtn.addEventListener("click", async () => {
       if (!myName) return;
-      if (!confirm("대화 내용을 모두 삭제할까요?")) return;
+      if (!confirm("대화 내용과 사진을 모두 삭제할까요?")) return;
       await requestClear();
     });
 
@@ -342,7 +432,7 @@ function parseJsonBody(req) {
     let raw = "";
     req.on("data", (chunk) => {
       raw += chunk;
-      if (raw.length > 1e6) {
+      if (raw.length > MAX_BODY_BYTES) {
         reject(new Error("Payload too large"));
         req.destroy();
       }
@@ -442,11 +532,20 @@ const server = http.createServer(async (req, res) => {
       const body = await parseJsonBody(req);
       const sender = String(body.sender || "").trim().slice(0, 20);
       const text = String(body.text || "").trim().slice(0, 2000);
-      if (!sender || !text) {
+      const image = typeof body.image === "string" && body.image.startsWith("data:image/") ? body.image : "";
+
+      if (!sender || (!text && !image)) {
         res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
-        return res.end(JSON.stringify({ error: "메시지가 비어 있습니다." }));
+        return res.end(JSON.stringify({ error: "내용이 비어 있습니다." }));
       }
-      const msg = { id: crypto.randomBytes(4).toString("hex"), sender, text, ts: Date.now() };
+
+      const msg = {
+        id: crypto.randomBytes(4).toString("hex"),
+        sender,
+        text,
+        image,
+        ts: Date.now(),
+      };
       pushMessage(msg);
       broadcast({ type: "message", message: msg });
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
