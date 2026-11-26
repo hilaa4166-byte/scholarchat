@@ -1,13 +1,11 @@
 "use strict";
 // 단둘이 쓰는 비공개 채팅 서버. 외부 패키지 없이 Node 내장 모듈만 씁니다.
-// - 길고 무작위인 비밀 주소를 아는 사람만 들어올 수 있어요. 그 밖의 주소는 모두 404예요.
+// - 비밀 주소를 아는 사람만 들어올 수 있어요. 그 밖의 주소는 모두 404예요.
 // - 동시에 접속할 수 있는 사람은 최대 2명이에요.
 // - 대화는 서버 메모리에만 있고(최근 100개), 서버가 꺼지면 사라져요.
 
 const http = require("http");
 const crypto = require("crypto");
-const fs = require("fs");
-const path = require("path");
 
 const PORT = process.env.PORT || 3000;
 const MAX_HISTORY = 100;
@@ -16,27 +14,20 @@ const MAX_NAME = 20;
 const MAX_BODY = 4096;
 const MAX_PEOPLE = 2;
 const MAX_CONNECTIONS = 10;
-const SECRET_RE = /^[A-Za-z0-9_-]{32,128}$/;
+const SECRET_RE = /^[A-Za-z0-9_-]{4,128}$/;
 const CID_RE = /^[A-Za-z0-9]{8,40}$/;
 
-// 비밀 주소: ROOM_SECRET 환경변수 > .room-secret 파일 > 새로 생성(파일에 저장)
+// 비밀 주소: ROOM_SECRET 환경변수가 있으면 사용, 없으면 "scholarchat"
 function loadSecret() {
   const fromEnv = (process.env.ROOM_SECRET || "").trim();
   if (fromEnv) {
     if (!SECRET_RE.test(fromEnv)) {
-      console.error("ROOM_SECRET은 영문, 숫자, _, - 로만 이루어진 32~128자여야 해요.");
+      console.error("ROOM_SECRET은 영문, 숫자, _, - 로만 이루어진 4~128자여야 해요.");
       process.exit(1);
     }
     return fromEnv;
   }
-  const file = path.join(__dirname, ".room-secret");
-  try {
-    const saved = fs.readFileSync(file, "utf8").trim();
-    if (SECRET_RE.test(saved)) return saved;
-  } catch (e) {}
-  const fresh = crypto.randomBytes(33).toString("base64url"); // 44자
-  try { fs.writeFileSync(file, fresh + "\n", { mode: 0o600 }); } catch (e) {}
-  return fresh;
+  return "scholarchat";
 }
 const SECRET = loadSecret();
 const SECRET_BUF = Buffer.from(SECRET);
