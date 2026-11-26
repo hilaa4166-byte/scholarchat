@@ -46,10 +46,16 @@ function renderPage() {
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ScholarChat</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+      -webkit-text-size-adjust: 100%;
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #0f172a;
@@ -63,33 +69,53 @@ function renderPage() {
     header {
       background: #1e293b;
       border-bottom: 1px solid #334155;
-      padding: 12px 16px;
+      padding: 10px 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 8px;
+      width: 100%;
     }
-    .room-info { display: flex; flex-direction: column; gap: 2px; }
-    .room-title { font-weight: 700; font-size: 16px; }
-    .room-meta { font-size: 12px; color: #94a3b8; }
+    .room-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+      flex: 1;
+    }
+    .room-title {
+      font-weight: 700;
+      font-size: 15px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .room-meta {
+      font-size: 11px;
+      color: #94a3b8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     button {
       cursor: pointer;
       border: none;
       border-radius: 8px;
-      padding: 8px 12px;
+      padding: 8px 10px;
       font-size: 13px;
       font-weight: 600;
       flex-shrink: 0;
+      white-space: nowrap;
     }
-    .btn-clear { background: #dc2626; color: #fff; }
+    .btn-clear { background: #dc2626; color: #fff; font-size: 12px; padding: 7px 10px; }
     .btn-clear:hover { background: #b91c1c; }
     .btn-send { background: #2563eb; color: #fff; }
     .btn-send:hover { background: #1d4ed8; }
     .btn-attach {
       background: #334155;
       color: #f8fafc;
-      padding: 8px 10px;
-      font-size: 16px;
+      padding: 8px;
+      font-size: 15px;
       line-height: 1;
     }
     .btn-attach:hover { background: #475569; }
@@ -98,7 +124,8 @@ function renderPage() {
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 16px;
+      width: 100%;
     }
     .join-card {
       width: 100%;
@@ -106,21 +133,22 @@ function renderPage() {
       background: #1e293b;
       border: 1px solid #334155;
       border-radius: 14px;
-      padding: 24px;
+      padding: 20px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 12px;
     }
-    .join-card h2 { font-size: 18px; }
+    .join-card h2 { font-size: 17px; }
     .join-card p { font-size: 13px; color: #94a3b8; line-height: 1.4; }
     input[type="text"] {
       width: 100%;
+      min-width: 0;
       background: #0f172a;
       border: 1px solid #475569;
       color: #f8fafc;
       border-radius: 8px;
-      padding: 10px 12px;
-      font-size: 14px;
+      padding: 9px 10px;
+      font-size: 15px; /* iOS 자동 줌 방지용 15px 이상 */
       outline: none;
     }
     input[type="text"]:focus { border-color: #3b82f6; }
@@ -129,22 +157,26 @@ function renderPage() {
       display: none;
       flex-direction: column;
       min-height: 0;
+      width: 100%;
     }
     #messages {
       flex: 1;
       overflow-y: auto;
-      padding: 16px;
+      overflow-x: hidden;
+      padding: 12px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
+      width: 100%;
     }
     .msg {
-      max-width: 78%;
-      padding: 10px 12px;
+      max-width: 82%;
+      padding: 9px 11px;
       border-radius: 12px;
       background: #1e293b;
       border: 1px solid #334155;
       word-break: break-word;
+      overflow-wrap: anywhere;
     }
     .msg.mine {
       align-self: flex-end;
@@ -154,25 +186,27 @@ function renderPage() {
     .msg-sender {
       font-size: 11px;
       color: #cbd5e1;
-      margin-bottom: 4px;
+      margin-bottom: 3px;
       font-weight: 600;
     }
     .msg-text {
       font-size: 14px;
-      line-height: 1.45;
+      line-height: 1.4;
       white-space: pre-wrap;
     }
     .msg-img {
       display: block;
       max-width: 100%;
-      max-height: 320px;
+      max-height: 280px;
       border-radius: 8px;
       margin-top: 4px;
       cursor: pointer;
     }
     .sys-msg {
       align-self: center;
-      font-size: 12px;
+      max-width: 92%;
+      text-align: center;
+      font-size: 11px;
       color: #94a3b8;
       background: rgba(30, 41, 59, 0.7);
       padding: 5px 10px;
@@ -181,15 +215,22 @@ function renderPage() {
     #composer {
       background: #1e293b;
       border-top: 1px solid #334155;
-      padding: 10px 12px;
+      padding: 8px 10px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+      width: 100%;
+      min-width: 0;
+    }
+    #message-input {
+      flex: 1;
+      min-width: 0;
+      width: auto;
     }
     #status-msg {
-      font-size: 13px;
+      font-size: 12px;
       color: #f87171;
-      min-height: 18px;
+      min-height: 16px;
     }
   </style>
 </head>
@@ -217,7 +258,7 @@ function renderPage() {
     <form id="composer">
       <input type="file" id="photo-input" accept="image/*" hidden />
       <button class="btn-attach" id="photo-btn" type="button" title="파일/사진 첨부">📎</button>
-      <input type="text" id="message-input" placeholder="메시지 입력 (/clear 입력 시 대화 삭제)" autocomplete="off" />
+      <input type="text" id="message-input" placeholder="메시지 입력 (/clear 삭제)" autocomplete="off" />
       <button class="btn-send" type="submit">전송</button>
     </form>
   </section>
@@ -262,7 +303,7 @@ function renderPage() {
       const tone1 = ctx.createOscillator();
       const gain1 = ctx.createGain();
       tone1.type = "sine";
-      tone1.frequency.setValueAtTime(880, now); // A5 ("띠")
+      tone1.frequency.setValueAtTime(880, now);
       gain1.gain.setValueAtTime(0.001, now);
       gain1.gain.exponentialRampToValueAtTime(0.14, now + 0.015);
       gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
@@ -274,7 +315,7 @@ function renderPage() {
       const tone2 = ctx.createOscillator();
       const gain2 = ctx.createGain();
       tone2.type = "sine";
-      tone2.frequency.setValueAtTime(1318.51, now + 0.09); // E6 ("링~")
+      tone2.frequency.setValueAtTime(1318.51, now + 0.09);
       gain2.gain.setValueAtTime(0.001, now + 0.09);
       gain2.gain.exponentialRampToValueAtTime(0.16, now + 0.11);
       gain2.gain.exponentialRampToValueAtTime(0.0008, now + 0.36);
@@ -616,18 +657,3 @@ const server = http.createServer(async (req, res) => {
       broadcast({ type: "cleared", by });
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       return res.end(JSON.stringify({ ok: true }));
-    } catch (_) {
-      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
-      return res.end(JSON.stringify({ error: "삭제 실패" }));
-    }
-  }
-
-  res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-  res.end("Not found");
-});
-
-server.listen(PORT, () => {
-  console.log("채팅 서버가 시작됐어요.");
-  console.log("아래 주소를 친구와 둘만 공유하세요. 이 주소를 아는 사람만 들어올 수 있어요.");
-  console.log(`http://localhost:${PORT}/r/${ROOM_ID}`);
-});
