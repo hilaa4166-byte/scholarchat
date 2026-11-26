@@ -85,14 +85,14 @@ function renderPage() {
     .btn-clear:hover { background: #b91c1c; }
     .btn-send { background: #2563eb; color: #fff; }
     .btn-send:hover { background: #1d4ed8; }
-    .btn-photo {
+    .btn-attach {
       background: #334155;
       color: #f8fafc;
       padding: 8px 10px;
       font-size: 16px;
       line-height: 1;
     }
-    .btn-photo:hover { background: #475569; }
+    .btn-attach:hover { background: #475569; }
     #join-screen {
       flex: 1;
       display: flex;
@@ -216,7 +216,7 @@ function renderPage() {
     <div id="messages"></div>
     <form id="composer">
       <input type="file" id="photo-input" accept="image/*" hidden />
-      <button class="btn-photo" id="photo-btn" type="button" title="사진 첨부">📷</button>
+      <button class="btn-attach" id="photo-btn" type="button" title="파일/사진 첨부">📎</button>
       <input type="text" id="message-input" placeholder="메시지 입력 (/clear 입력 시 대화 삭제)" autocomplete="off" />
       <button class="btn-send" type="submit">전송</button>
     </form>
@@ -238,6 +238,51 @@ function renderPage() {
 
     let myName = "";
     let eventSource = null;
+    let audioCtx = null;
+
+    function ensureAudioContext() {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return null;
+      if (!audioCtx) {
+        audioCtx = new AudioContextClass();
+      }
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+      return audioCtx;
+    }
+
+    // "띠링~" 이중 톤 알림음 재생
+    function playDingSound() {
+      const ctx = ensureAudioContext();
+      if (!ctx) return;
+
+      const now = ctx.currentTime;
+
+      const tone1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      tone1.type = "sine";
+      tone1.frequency.setValueAtTime(880, now); // A5 ("띠")
+      gain1.gain.setValueAtTime(0.001, now);
+      gain1.gain.exponentialRampToValueAtTime(0.14, now + 0.015);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      tone1.connect(gain1);
+      gain1.connect(ctx.destination);
+      tone1.start(now);
+      tone1.stop(now + 0.15);
+
+      const tone2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      tone2.type = "sine";
+      tone2.frequency.setValueAtTime(1318.51, now + 0.09); // E6 ("링~")
+      gain2.gain.setValueAtTime(0.001, now + 0.09);
+      gain2.gain.exponentialRampToValueAtTime(0.16, now + 0.11);
+      gain2.gain.exponentialRampToValueAtTime(0.0008, now + 0.36);
+      tone2.connect(gain2);
+      gain2.connect(ctx.destination);
+      tone2.start(now + 0.09);
+      tone2.stop(now + 0.38);
+    }
 
     function addSystemMessage(text) {
       const div = document.createElement("div");
@@ -322,6 +367,7 @@ function renderPage() {
 
     photoBtn.addEventListener("click", () => {
       if (!myName) return;
+      ensureAudioContext();
       photoInput.click();
     });
 
@@ -347,12 +393,14 @@ function renderPage() {
 
     clearBtn.addEventListener("click", async () => {
       if (!myName) return;
+      ensureAudioContext();
       if (!confirm("대화 내용과 사진을 모두 삭제할까요?")) return;
       await requestClear();
     });
 
     joinForm.addEventListener("submit", async (e) => {
       e.preventDefault();
+      ensureAudioContext();
       statusMsg.textContent = "";
       const name = nicknameInput.value.trim();
       if (!name) return;
@@ -386,6 +434,9 @@ function renderPage() {
         const payload = JSON.parse(event.data);
         if (payload.type === "message") {
           addChatMessage(payload.message);
+          if (payload.message && payload.message.sender !== myName) {
+            playDingSound();
+          }
         } else if (payload.type === "presence") {
           updateMeta(payload.users || []);
         } else if (payload.type === "system") {
@@ -403,6 +454,7 @@ function renderPage() {
 
     composer.addEventListener("submit", async (e) => {
       e.preventDefault();
+      ensureAudioContext();
       const text = messageInput.value.trim();
       if (!text || !myName) return;
       messageInput.value = "";
