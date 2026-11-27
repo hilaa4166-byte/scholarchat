@@ -99,6 +99,12 @@ function renderPage() {
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
     button {
       cursor: pointer;
       border: 1px solid #27272a;
@@ -110,12 +116,22 @@ function renderPage() {
       white-space: nowrap;
       transition: background 0.15s ease;
     }
+    .btn-leave {
+      background: #18181b;
+      border-color: #27272a;
+      color: #d4d4d8;
+      font-size: 12px;
+      padding: 7px 10px;
+      display: none;
+    }
+    .btn-leave:hover { background: #27272a; }
     .btn-clear {
       background: #450a0a;
       border-color: #7f1d1d;
       color: #fecaca;
       font-size: 12px;
       padding: 7px 10px;
+      display: none;
     }
     .btn-clear:hover { background: #7f1d1d; }
     .btn-send {
@@ -185,8 +201,18 @@ function renderPage() {
       width: 100%;
       background: #09090b;
     }
-    .msg {
+    .msg-row {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
       max-width: 82%;
+    }
+    .msg-row.mine {
+      align-self: flex-end;
+      align-items: flex-end;
+    }
+    .msg {
+      width: 100%;
       padding: 9px 11px;
       border-radius: 12px;
       background: #18181b;
@@ -194,8 +220,7 @@ function renderPage() {
       word-break: break-word;
       overflow-wrap: anywhere;
     }
-    .msg.mine {
-      align-self: flex-end;
+    .msg-row.mine .msg {
       background: #27272a;
       border-color: #3f3f46;
     }
@@ -219,6 +244,13 @@ function renderPage() {
       margin-top: 4px;
       cursor: pointer;
     }
+    .msg-read {
+      font-size: 10px;
+      color: #71717a;
+      margin-top: 3px;
+      padding-right: 2px;
+      min-height: 13px;
+    }
     .sys-msg {
       align-self: center;
       max-width: 92%;
@@ -229,6 +261,21 @@ function renderPage() {
       border: 1px solid #1f1f23;
       padding: 5px 10px;
       border-radius: 999px;
+    }
+    #typing-bar {
+      background: #09090b;
+      color: #71717a;
+      font-size: 11px;
+      padding: 0 12px;
+      height: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      transition: height 0.12s ease;
+    }
+    #typing-bar.active {
+      height: 22px;
+      border-top: 1px solid #18181b;
     }
     #composer {
       background: #121215;
@@ -258,7 +305,10 @@ function renderPage() {
       <div class="room-title">ScholarChat</div>
       <div class="room-meta" id="room-meta">대기 중 · 최대 ${MAX_USERS}명 · /clear</div>
     </div>
-    <button class="btn-clear" id="clear-btn" type="button">대화 삭제</button>
+    <div class="header-actions">
+      <button class="btn-leave" id="leave-btn" type="button">나가기</button>
+      <button class="btn-clear" id="clear-btn" type="button">대화 삭제</button>
+    </div>
   </header>
 
   <section id="join-screen">
@@ -273,6 +323,7 @@ function renderPage() {
 
   <section id="chat-screen">
     <div id="messages"></div>
+    <div id="typing-bar"></div>
     <form id="composer">
       <input type="file" id="photo-input" accept="image/*" hidden />
       <button class="btn-attach" id="photo-btn" type="button" title="파일/사진 첨부">📎</button>
@@ -288,9 +339,11 @@ function renderPage() {
     const nicknameInput = document.getElementById("nickname-input");
     const statusMsg = document.getElementById("status-msg");
     const messagesEl = document.getElementById("messages");
+    const typingBar = document.getElementById("typing-bar");
     const composer = document.getElementById("composer");
     const messageInput = document.getElementById("message-input");
     const roomMeta = document.getElementById("room-meta");
+    const leaveBtn = document.getElementById("leave-btn");
     const clearBtn = document.getElementById("clear-btn");
     const photoBtn = document.getElementById("photo-btn");
     const photoInput = document.getElementById("photo-input");
@@ -298,6 +351,9 @@ function renderPage() {
     let myName = "";
     let eventSource = null;
     let audioCtx = null;
+    let lastTypingSentAt = 0;
+    let typingHideTimer = null;
+    const readElsById = new Map();
 
     function requestNotificationPermissionIfNeeded() {
       if (!("Notification" in window)) return;
@@ -367,6 +423,51 @@ function renderPage() {
       tone2.stop(now + 0.38);
     }
 
+    function showRemoteTyping(name) {
+      typingBar.textContent = \`\${name}님이 입력 중...\`;
+      typingBar.classList.add("active");
+      clearTimeout(typingHideTimer);
+      typingHideTimer = setTimeout(() => {
+        hideRemoteTyping();
+      }, 2500);
+    }
+
+    function hideRemoteTyping() {
+      clearTimeout(typingHideTimer);
+      typingBar.textContent = "";
+      typingBar.classList.remove("active");
+    }
+
+    function sendTypingSignal(isTyping) {
+      if (!myName) return;
+      const now = Date.now();
+      if (isTyping && now - lastTypingSentAt < 1200) return;
+      lastTypingSentAt = isTyping ? now : 0;
+      fetch("/api/typing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sender: myName, typing: isTyping }),
+      }).catch(() => {});
+    }
+
+    function sendReadReceipt(ids) {
+      if (!myName || !Array.isArray(ids) || ids.length === 0) return;
+      if (document.hidden) return;
+      fetch("/api/read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reader: myName, ids }),
+      }).catch(() => {});
+    }
+
+    function markMessagesAsRead(ids) {
+      if (!Array.isArray(ids)) return;
+      for (const id of ids) {
+        const el = readElsById.get(id);
+        if (el) el.textContent = "읽음";
+      }
+    }
+
     function addSystemMessage(text) {
       const div = document.createElement("div");
       div.className = "sys-msg";
@@ -376,8 +477,12 @@ function renderPage() {
     }
 
     function addChatMessage(msg) {
+      const isMine = msg.sender === myName;
+      const row = document.createElement("div");
+      row.className = "msg-row" + (isMine ? " mine" : "");
+
       const div = document.createElement("div");
-      div.className = "msg" + (msg.sender === myName ? " mine" : "");
+      div.className = "msg";
 
       const sender = document.createElement("div");
       sender.className = "msg-sender";
@@ -400,13 +505,44 @@ function renderPage() {
         div.appendChild(text);
       }
 
-      messagesEl.appendChild(div);
+      row.appendChild(div);
+
+      if (isMine && msg.id) {
+        const readEl = document.createElement("div");
+        readEl.className = "msg-read";
+        const readByOthers = Array.isArray(msg.readBy) && msg.readBy.some((n) => n !== myName);
+        readEl.textContent = readByOthers ? "읽음" : "";
+        readElsById.set(msg.id, readEl);
+        row.appendChild(readEl);
+      }
+
+      messagesEl.appendChild(row);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
     function updateMeta(users) {
       const listText = users.length ? users.join(", ") : "없음";
       roomMeta.textContent = \`접속 \${users.length}/\${${MAX_USERS}} (\${listText}) · /clear\`;
+    }
+
+    function leaveRoomUI() {
+      if (myName) {
+        sendTypingSignal(false);
+      }
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      myName = "";
+      readElsById.clear();
+      hideRemoteTyping();
+      messagesEl.innerHTML = "";
+      chatScreen.style.display = "none";
+      leaveBtn.style.display = "none";
+      clearBtn.style.display = "none";
+      joinScreen.style.display = "flex";
+      roomMeta.textContent = \`대기 중 · 최대 \${${MAX_USERS}}명 · /clear\`;
+      statusMsg.textContent = "";
     }
 
     async function requestClear() {
@@ -475,12 +611,29 @@ function renderPage() {
       }
     });
 
+    leaveBtn.addEventListener("click", () => {
+      if (!myName) return;
+      leaveRoomUI();
+    });
+
     clearBtn.addEventListener("click", async () => {
       if (!myName) return;
       ensureAudioContext();
       requestNotificationPermissionIfNeeded();
       if (!confirm("대화 내용과 사진을 모두 삭제할까요?")) return;
       await requestClear();
+    });
+
+    messageInput.addEventListener("input", () => {
+      if (!myName) return;
+      const hasText = messageInput.value.trim().length > 0;
+      sendTypingSignal(hasText);
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && myName) {
+        sendReadReceipt(["__all__"]);
+      }
     });
 
     joinForm.addEventListener("submit", async (e) => {
@@ -506,13 +659,25 @@ function renderPage() {
       myName = name;
       joinScreen.style.display = "none";
       chatScreen.style.display = "flex";
+      leaveBtn.style.display = "inline-block";
+      clearBtn.style.display = "inline-block";
       messageInput.focus();
 
+      readElsById.clear();
       messagesEl.innerHTML = "";
+      const unreadIds = [];
       if (Array.isArray(data.messages)) {
-        for (const m of data.messages) addChatMessage(m);
+        for (const m of data.messages) {
+          addChatMessage(m);
+          if (m.sender !== myName && m.id && (!Array.isArray(m.readBy) || !m.readBy.includes(myName))) {
+            unreadIds.push(m.id);
+          }
+        }
       }
       updateMeta(data.users || []);
+      if (unreadIds.length > 0) {
+        sendReadReceipt(unreadIds);
+      }
 
       eventSource = new EventSource(\`/api/stream?name=\${encodeURIComponent(myName)}\`);
 
@@ -521,21 +686,40 @@ function renderPage() {
         if (payload.type === "message") {
           addChatMessage(payload.message);
           if (payload.message && payload.message.sender !== myName) {
+            hideRemoteTyping();
             playDingSound();
             showTopBanner(payload.message);
+            if (payload.message.id) {
+              sendReadReceipt([payload.message.id]);
+            }
+          }
+        } else if (payload.type === "read") {
+          if (payload.reader && payload.reader !== myName) {
+            markMessagesAsRead(payload.ids || []);
+          }
+        } else if (payload.type === "typing") {
+          if (payload.sender && payload.sender !== myName) {
+            if (payload.typing) {
+              showRemoteTyping(payload.sender);
+            } else {
+              hideRemoteTyping();
+            }
           }
         } else if (payload.type === "presence") {
           updateMeta(payload.users || []);
         } else if (payload.type === "system") {
           addSystemMessage(payload.text);
         } else if (payload.type === "cleared") {
+          readElsById.clear();
           messagesEl.innerHTML = "";
           addSystemMessage(\`\${payload.by || "참여자"}님이 대화 내용을 삭제했습니다.\`);
         }
       };
 
       eventSource.onerror = () => {
-        addSystemMessage("연결이 끊어졌습니다. 새로고침 후 다시 입장해 주세요.");
+        if (myName) {
+          addSystemMessage("연결이 끊어졌습니다. 새로고침 또는 나가기 후 다시 입장해 주세요.");
+        }
       };
     });
 
@@ -546,6 +730,7 @@ function renderPage() {
       const text = messageInput.value.trim();
       if (!text || !myName) return;
       messageInput.value = "";
+      sendTypingSignal(false);
 
       if (text === "/clear") {
         await requestClear();
@@ -661,6 +846,7 @@ const server = http.createServer(async (req, res) => {
     req.on("close", () => {
       clearInterval(keepAlive);
       room.clients.delete(client);
+      broadcast({ type: "typing", sender: name, typing: false });
       broadcast({ type: "presence", users: getParticipantNames() });
       broadcast({ type: "system", text: `${name}님이 퇴장했습니다.` });
     });
@@ -684,6 +870,7 @@ const server = http.createServer(async (req, res) => {
         sender,
         text,
         image,
+        readBy: [sender],
         ts: Date.now(),
       };
       pushMessage(msg);
@@ -693,6 +880,57 @@ const server = http.createServer(async (req, res) => {
     } catch (_) {
       res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
       return res.end(JSON.stringify({ error: "전송 실패" }));
+    }
+  }
+
+  if (req.method === "POST" && u.pathname === "/api/typing") {
+    try {
+      const body = await parseJsonBody(req);
+      const sender = String(body.sender || "").trim().slice(0, 20);
+      const typing = Boolean(body.typing);
+      if (sender) {
+        broadcast({ type: "typing", sender, typing });
+      }
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      return res.end(JSON.stringify({ ok: true }));
+    } catch (_) {
+      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+      return res.end(JSON.stringify({ error: "요청 실패" }));
+    }
+  }
+
+  if (req.method === "POST" && u.pathname === "/api/read") {
+    try {
+      const body = await parseJsonBody(req);
+      const reader = String(body.reader || "").trim().slice(0, 20);
+      const reqIds = Array.isArray(body.ids) ? body.ids : [];
+      if (!reader || reqIds.length === 0) {
+        res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+        return res.end(JSON.stringify({ error: "잘못된 요청" }));
+      }
+
+      const readAll = reqIds.includes("__all__");
+      const idSet = new Set(reqIds);
+      const updatedIds = [];
+
+      for (const msg of room.messages) {
+        if (msg.sender === reader) continue;
+        if (!readAll && !idSet.has(msg.id)) continue;
+        if (!Array.isArray(msg.readBy)) msg.readBy = [msg.sender];
+        if (!msg.readBy.includes(reader)) {
+          msg.readBy.push(reader);
+          updatedIds.push(msg.id);
+        }
+      }
+
+      if (updatedIds.length > 0) {
+        broadcast({ type: "read", reader, ids: updatedIds });
+      }
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      return res.end(JSON.stringify({ ok: true }));
+    } catch (_) {
+      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+      return res.end(JSON.stringify({ error: "읽음 처리 실패" }));
     }
   }
 
