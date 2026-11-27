@@ -47,6 +47,7 @@ function renderPage() {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#09090b" />
   <title>ScholarChat</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -58,8 +59,8 @@ function renderPage() {
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
+      background: #09090b;
+      color: #f4f4f5;
       height: 100dvh;
       display: flex;
       flex-direction: column;
@@ -67,8 +68,8 @@ function renderPage() {
       padding-bottom: env(safe-area-inset-bottom);
     }
     header {
-      background: #1e293b;
-      border-bottom: 1px solid #334155;
+      background: #121215;
+      border-bottom: 1px solid #27272a;
       padding: 10px 12px;
       display: flex;
       align-items: center;
@@ -86,39 +87,52 @@ function renderPage() {
     .room-title {
       font-weight: 700;
       font-size: 15px;
+      color: #fafafa;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .room-meta {
       font-size: 11px;
-      color: #94a3b8;
+      color: #71717a;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     button {
       cursor: pointer;
-      border: none;
+      border: 1px solid #27272a;
       border-radius: 8px;
       padding: 8px 10px;
       font-size: 13px;
       font-weight: 600;
       flex-shrink: 0;
       white-space: nowrap;
+      transition: background 0.15s ease;
     }
-    .btn-clear { background: #dc2626; color: #fff; font-size: 12px; padding: 7px 10px; }
-    .btn-clear:hover { background: #b91c1c; }
-    .btn-send { background: #2563eb; color: #fff; }
-    .btn-send:hover { background: #1d4ed8; }
+    .btn-clear {
+      background: #450a0a;
+      border-color: #7f1d1d;
+      color: #fecaca;
+      font-size: 12px;
+      padding: 7px 10px;
+    }
+    .btn-clear:hover { background: #7f1d1d; }
+    .btn-send {
+      background: #27272a;
+      border-color: #3f3f46;
+      color: #fafafa;
+    }
+    .btn-send:hover { background: #3f3f46; }
     .btn-attach {
-      background: #334155;
-      color: #f8fafc;
+      background: #18181b;
+      border-color: #27272a;
+      color: #e4e4e7;
       padding: 8px;
       font-size: 15px;
       line-height: 1;
     }
-    .btn-attach:hover { background: #475569; }
+    .btn-attach:hover { background: #27272a; }
     #join-screen {
       flex: 1;
       display: flex;
@@ -130,28 +144,29 @@ function renderPage() {
     .join-card {
       width: 100%;
       max-width: 360px;
-      background: #1e293b;
-      border: 1px solid #334155;
+      background: #121215;
+      border: 1px solid #27272a;
       border-radius: 14px;
       padding: 20px;
       display: flex;
       flex-direction: column;
       gap: 12px;
     }
-    .join-card h2 { font-size: 17px; }
-    .join-card p { font-size: 13px; color: #94a3b8; line-height: 1.4; }
+    .join-card h2 { font-size: 17px; color: #fafafa; }
+    .join-card p { font-size: 13px; color: #a1a1aa; line-height: 1.4; }
     input[type="text"] {
       width: 100%;
       min-width: 0;
-      background: #0f172a;
-      border: 1px solid #475569;
-      color: #f8fafc;
+      background: #09090b;
+      border: 1px solid #27272a;
+      color: #fafafa;
       border-radius: 8px;
       padding: 9px 10px;
       font-size: 15px;
       outline: none;
     }
-    input[type="text"]:focus { border-color: #3b82f6; }
+    input[type="text"]::placeholder { color: #52525b; }
+    input[type="text"]:focus { border-color: #52525b; }
     #chat-screen {
       flex: 1;
       display: none;
@@ -168,30 +183,32 @@ function renderPage() {
       flex-direction: column;
       gap: 8px;
       width: 100%;
+      background: #09090b;
     }
     .msg {
       max-width: 82%;
       padding: 9px 11px;
       border-radius: 12px;
-      background: #1e293b;
-      border: 1px solid #334155;
+      background: #18181b;
+      border: 1px solid #27272a;
       word-break: break-word;
       overflow-wrap: anywhere;
     }
     .msg.mine {
       align-self: flex-end;
-      background: #1d4ed8;
-      border-color: #2563eb;
+      background: #27272a;
+      border-color: #3f3f46;
     }
     .msg-sender {
       font-size: 11px;
-      color: #cbd5e1;
+      color: #a1a1aa;
       margin-bottom: 3px;
       font-weight: 600;
     }
     .msg-text {
       font-size: 14px;
       line-height: 1.4;
+      color: #f4f4f5;
       white-space: pre-wrap;
     }
     .msg-img {
@@ -207,14 +224,15 @@ function renderPage() {
       max-width: 92%;
       text-align: center;
       font-size: 11px;
-      color: #94a3b8;
-      background: rgba(30, 41, 59, 0.7);
+      color: #71717a;
+      background: #121215;
+      border: 1px solid #1f1f23;
       padding: 5px 10px;
       border-radius: 999px;
     }
     #composer {
-      background: #1e293b;
-      border-top: 1px solid #334155;
+      background: #121215;
+      border-top: 1px solid #27272a;
       padding: 8px 10px;
       display: flex;
       align-items: center;
@@ -280,6 +298,31 @@ function renderPage() {
     let myName = "";
     let eventSource = null;
     let audioCtx = null;
+
+    function requestNotificationPermissionIfNeeded() {
+      if (!("Notification" in window)) return;
+      if (Notification.permission === "default") {
+        Notification.requestPermission().catch(() => {});
+      }
+    }
+
+    function showTopBanner(msg) {
+      if (!("Notification" in window)) return;
+      if (Notification.permission !== "granted") return;
+
+      const bodyText = msg.text || (msg.image ? "사진을 보냈습니다." : "새 메시지가 도착했습니다.");
+      try {
+        const n = new Notification(msg.sender || "ScholarChat", {
+          body: bodyText,
+          tag: "scholarchat-msg",
+          renotify: true,
+        });
+        n.onclick = () => {
+          window.focus();
+          n.close();
+        };
+      } catch (_) {}
+    }
 
     function ensureAudioContext() {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -408,6 +451,7 @@ function renderPage() {
     photoBtn.addEventListener("click", () => {
       if (!myName) return;
       ensureAudioContext();
+      requestNotificationPermissionIfNeeded();
       photoInput.click();
     });
 
@@ -434,6 +478,7 @@ function renderPage() {
     clearBtn.addEventListener("click", async () => {
       if (!myName) return;
       ensureAudioContext();
+      requestNotificationPermissionIfNeeded();
       if (!confirm("대화 내용과 사진을 모두 삭제할까요?")) return;
       await requestClear();
     });
@@ -441,6 +486,7 @@ function renderPage() {
     joinForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       ensureAudioContext();
+      requestNotificationPermissionIfNeeded();
       statusMsg.textContent = "";
       const name = nicknameInput.value.trim();
       if (!name) return;
@@ -476,6 +522,7 @@ function renderPage() {
           addChatMessage(payload.message);
           if (payload.message && payload.message.sender !== myName) {
             playDingSound();
+            showTopBanner(payload.message);
           }
         } else if (payload.type === "presence") {
           updateMeta(payload.users || []);
@@ -495,6 +542,7 @@ function renderPage() {
     composer.addEventListener("submit", async (e) => {
       e.preventDefault();
       ensureAudioContext();
+      requestNotificationPermissionIfNeeded();
       const text = messageInput.value.trim();
       if (!text || !myName) return;
       messageInput.value = "";
